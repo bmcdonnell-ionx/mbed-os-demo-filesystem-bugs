@@ -91,24 +91,26 @@ static void printRootAndTestDirListing() {
 static void createEmptyTestFile(size_t num) {
     char path[30];
     sprintf(path, "/fs/fs-test/%08x.bin", num);
-    printf("  Create %s...", path);
+    //printf("  Create %s...", path);
     fflush(stdout);
     FILE *pfout = fopen(path, "w");
     if (pfout != NULL)
     {
-        printf("OK.");
+        //printf("OK.");
         int ret = fclose(pfout);
 
         if (ret != 0)
         {
-            printf(" ERROR CLOSING.");
+            printf("\r\n ERROR CLOSING %s.\r\n", path);
+            fflush(stdout);
         }
     }
     else
     {
-        printf("FAILED.");
+        printf("\r\nFAILED to create %s.\r\n", path);
+        fflush(stdout);
     }
-    printf("\r\n");
+    //printf("\r\n");
     fflush(stdout);
 }
 
@@ -151,10 +153,17 @@ int main() {
     printf("Almost fill up the test directory (create %d files):\r\n",
           (FAT32_MAX_FILES_PER_DIR - 1) );
 
+    printf("Creating files...\r\n");
     for (size_t i = 0; i < (FAT32_MAX_FILES_PER_DIR - 1); i++)
     {
+        if ((i % 100) == 0)
+        {
+           printf("\r%5u", i);
+           fflush(stdout);
+        }
         createEmptyTestFile(i);
     }
+    printf("\rDone.\r\n");
 
     printf("\r\n\r\n**********\r\n");
     printf("Show that directory listing works fine when dir is not full:\r\n");
