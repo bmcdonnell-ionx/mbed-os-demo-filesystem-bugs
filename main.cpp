@@ -28,6 +28,8 @@
 //#include "LittleFileSystem.h"
 #include "FATFileSystem.h"
 
+#define FAT32_MAX_FILES_PER_DIR (65534)
+
 
 // Physical block device, can be any device that supports the BlockDevice API
 HeapBlockDevice bd(8*1024*1024);
@@ -35,42 +37,88 @@ HeapBlockDevice bd(8*1024*1024);
 // File system declaration
 FATFileSystem fs("fs", &bd);
 
-/*
-// Set up the button to trigger an erase
-//InterruptIn irq(BUTTON1);
-void erase() {
-    printf("Initializing the block device... ");
-    fflush(stdout);
-    int err = bd.init();
-    printf("%s\n", (err ? "Fail :(" : "OK"));
-    if (err) {
-        error("error: %s (%d)\n", strerror(-err), err);
-    }
 
-    printf("Erasing the block device... ");
-    fflush(stdout);
-    err = bd.erase(0, bd.size());
-    printf("%s\n", (err ? "Fail :(" : "OK"));
-    if (err) {
-        error("error: %s (%d)\n", strerror(-err), err);
-    }
+static void printDirListing(DIR *d) {
+    while (true) {
+         struct dirent *e = readdir(d);
+         if (!e) {
+              break;
+         }
 
-    printf("Deinitializing the block device... ");
-    fflush(stdout);
-    err = bd.deinit();
-    printf("%s\n", (err ? "Fail :(" : "OK"));
-    if (err) {
-        error("error: %s (%d)\n", strerror(-err), err);
+         printf("    %s\r\n", e->d_name);
     }
 }
-*/
+
+
+static void printRootAndTestDirListing() {
+    // Display the root directory
+    printf("Opening the root directory... ");
+    fflush(stdout);
+    DIR *d = opendir("/fs/");
+    printf("%s\r\n", (!d ? "Fail :(" : "OK"));
+    if (!d) {
+         error("error: %s (%d)\r\n", strerror(errno), -errno);
+    }
+
+    printf("root directory:\r\n");
+    printDirListing(d);
+
+    // Display the test directory
+    printf("Opening the test directory... ");
+    fflush(stdout);
+    d = opendir("/fs/fs-test");
+    printf("%s\r\n", (!d ? "Fail :(" : "OK"));
+    if (!d) {
+         error("error: %s (%d)\r\n", strerror(errno), -errno);
+    }
+
+    printf("test directory:\r\n");
+    printDirListing(d);
+
+    printf("Closing the root directory... ");
+    fflush(stdout);
+    int err = closedir(d);
+    printf("%s\r\n", (err < 0 ? "Fail :(" : "OK"));
+    if (err < 0) {
+         error("error: %s (%d)\r\n", strerror(errno), -errno);
+    }
+}
+
+
+static void createEmptyTestFile(size_t num) {
+    char path[30];
+    sprintf(path, "/fs/fs-test/%08x.bin", num);
+    printf("  Create %s...", path);
+    fflush(stdout);
+    FILE *pfout = fopen(path, "w");
+    if (pfout != NULL)
+    {
+        printf("OK.");
+        int ret = fclose(pfout);
+
+        if (ret != 0)
+        {
+            printf(" ERROR CLOSING.");
+        }
+    }
+    else
+    {
+        printf("FAILED.");
+    }
+    printf("\r\n");
+    fflush(stdout);
+}
 
 
 // Entry point for the example
 int main() {
-   sdram_init();
+    sdram_init();
 
     printf("\r\n--- Mbed OS filesystem example ---\r\n");
+    printf("Bug demo 01: Directory listing never ends\r\n");
+    printf("Demonstrate a bug where the directory listing for a full directory (with\r\n"
+          "65534 files) never terminates.\r\n"
+          "Use a HeapBlockDevice (not SD Card) for speed.\r\n\r\n");
     fflush(stdout);
 
     // Setup the irq in case we want to use it
@@ -93,175 +141,36 @@ int main() {
         }
     }
 
-   mkdir("/fs/fs-test", S_IRWXU | S_IRWXG | S_IRWXO);
+    char const testDirPath[] = "/fs/fs-test";
+    printf("Create test directory %s.\r\n", testDirPath);
+    mkdir(testDirPath, S_IRWXU | S_IRWXG | S_IRWXO);
 
-   for (size_t i = 0; i < 65534; i++)
-   {
-      char path[30];
-      sprintf(path, "/fs/fs-test/%08x.bin", i);
-      printf("  Create %s...", path);
-      fflush(stdout);
-      FILE *pfout = fopen(path, "w");
-      if (pfout != NULL)
-      {
-         printf("OK.");
-         int ret = fclose(pfout);
+    printf("Almost fill up the test directory (create %d files):\r\n",
+          (FAT32_MAX_FILES_PER_DIR - 1) );
 
-         if (ret != 0)
-         {
-            printf(" ERROR CLOSING.");
-         }
-      }
-      else
-      {
-         printf("FAILED.");
-      }
-      printf("\r\n");
-      fflush(stdout);
-   }
-
-
-   /*
-    // Open the numbers file
-    printf("Opening \"/fs/numbers.txt\"... ");
-    fflush(stdout);
-    FILE *f = fopen("/fs/numbers.txt", "r+");
-    printf("%s\n", (!f ? "Fail :(" : "OK"));
-    if (!f) {
-        // Create the numbers file if it doesn't exist
-        printf("No file found, creating a new file... ");
-        fflush(stdout);
-        f = fopen("/fs/numbers.txt", "w+");
-        printf("%s\n", (!f ? "Fail :(" : "OK"));
-        if (!f) {
-            error("error: %s (%d)\n", strerror(errno), -errno);
-        }
-
-        for (int i = 0; i < 10; i++) {
-            printf("\rWriting numbers (%d/%d)... ", i, 10);
-            fflush(stdout);
-            err = fprintf(f, "    %d\n", i);
-            if (err < 0) {
-                printf("Fail :(\n");
-                error("error: %s (%d)\n", strerror(errno), -errno);
-            }
-        }
-        printf("\rWriting numbers (%d/%d)... OK\n", 10, 10);
-
-        printf("Seeking file... ");
-        fflush(stdout);
-        err = fseek(f, 0, SEEK_SET);
-        printf("%s\n", (err < 0 ? "Fail :(" : "OK"));
-        if (err < 0) {
-            error("error: %s (%d)\n", strerror(errno), -errno);
-        }
+    for (size_t i = 0; i < (FAT32_MAX_FILES_PER_DIR - 1); i++)
+    {
+        createEmptyTestFile(i);
     }
 
-    // Go through and increment the numbers
-    for (int i = 0; i < 10; i++) {
-        printf("\rIncrementing numbers (%d/%d)... ", i, 10);
-        fflush(stdout);
+    printf("\r\n\r\n**********\r\n");
+    printf("Show that directory listing works fine when dir is not full:\r\n");
+    printf("\r\n**********\r\n");
+    printRootAndTestDirListing();
 
-        // Get current stream position
-        long pos = ftell(f);
+    printf("\r\n\r\n**********\r\n");
+    printf("Fill the directory; directory listing never ends:\r\n");
+    printf("\r\n**********\r\n");
+    // Create one more file to fill the dir.
+    createEmptyTestFile(FAT32_MAX_FILES_PER_DIR - 1); // -1 b/c 0-indexed numbering
 
-        // Parse out the number and increment
-        int32_t number;
-        fscanf(f, "%d", &number);
-        number += 1;
-
-        // Seek to beginning of number
-        fseek(f, pos, SEEK_SET);
-    
-        // Store number
-        fprintf(f, "    %d\n", number);
-    }
-    printf("\rIncrementing numbers (%d/%d)... OK\n", 10, 10);
-
-    // Close the file which also flushes any cached writes
-    printf("Closing \"/fs/numbers.txt\"... ");
-    fflush(stdout);
-    err = fclose(f);
-    printf("%s\n", (err < 0 ? "Fail :(" : "OK"));
-    if (err < 0) {
-        error("error: %s (%d)\n", strerror(errno), -errno);
-    }
-    */
-
-    // Display the root directory
-    printf("Opening the root directory... ");
-    fflush(stdout);
-    DIR *d = opendir("/fs/");
-    printf("%s\r\n", (!d ? "Fail :(" : "OK"));
-    if (!d) {
-        error("error: %s (%d)\r\n", strerror(errno), -errno);
-    }
-
-    printf("root directory:\r\n");
-    while (true) {
-        struct dirent *e = readdir(d);
-        if (!e) {
-            break;
-        }
-
-        printf("    %s\r\n", e->d_name);
-    }
-
-    // Display the test directory
-    printf("Opening the test directory... ");
-    fflush(stdout);
-    d = opendir("/fs/fs-test");
-    printf("%s\r\n", (!d ? "Fail :(" : "OK"));
-    if (!d) {
-        error("error: %s (%d)\r\n", strerror(errno), -errno);
-    }
-
-    printf("test directory:\r\n");
-    while (true) {
-        struct dirent *e = readdir(d);
-        if (!e) {
-            break;
-        }
-
-        printf("    %s\r\n", e->d_name);
-    }
-
-    printf("Closing the root directory... ");
-    fflush(stdout);
-    err = closedir(d);
-    printf("%s\r\n", (err < 0 ? "Fail :(" : "OK"));
-    if (err < 0) {
-        error("error: %s (%d)\r\n", strerror(errno), -errno);
-    }
+    //BUG: dirent * returned by readdir() doesn't go NULL after last entry
+    printRootAndTestDirListing();
 
 
-    // Display the numbers file
-    /*
-    printf("Opening \"/fs/numbers.txt\"... ");
-    fflush(stdout);
-    f = fopen("/fs/numbers.txt", "r");
-    printf("%s\n", (!f ? "Fail :(" : "OK"));
-    if (!f) {
-        error("error: %s (%d)\n", strerror(errno), -errno);
-    }
-
-    printf("numbers:\n");
-    while (!feof(f)) {
-        int c = fgetc(f);
-        printf("%c", c);
-    }
-
-    printf("\rClosing \"/fs/numbers.txt\"... ");
-    fflush(stdout);
-    err = fclose(f);
-    printf("%s\n", (err < 0 ? "Fail :(" : "OK"));
-    if (err < 0) {
-        error("error: %s (%d)\n", strerror(errno), -errno);
-    }
-    */
-
+    printf("\r\n\r\n**********\r\n");
+    //BUG: Program never gets here... see above.
     // Tidy up
-    /*
     printf("Unmounting... ");
     fflush(stdout);
     err = fs.unmount();
@@ -269,7 +178,6 @@ int main() {
     if (err < 0) {
         error("error: %s (%d)\n", strerror(-err), err);
     }
-    */
         
     printf("Mbed OS filesystem example done!\r\n");
     fflush(stdout);
@@ -279,4 +187,3 @@ int main() {
        wait_ms(500);
     }
 }
-
