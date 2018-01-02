@@ -29,6 +29,8 @@
 #include "FATFileSystem.h"
 
 #define FAT32_MAX_FILES_PER_DIR (65534)
+#define NUM_FILES_PER_LOOP      (  250)
+#define SERIAL_BAUD_RATE (115200)
 
 
 // Trial and error suggests each empty file is consuming 32 KiB on the
@@ -91,12 +93,10 @@ static void printRootAndTestDirListing() {
 static void createEmptyTestFile(size_t num) {
     char path[30];
     sprintf(path, "/fs/fs-test/%08x.bin", num);
-    //printf("  Create %s...", path);
     fflush(stdout);
     FILE *pfout = fopen(path, "w");
     if (pfout != NULL)
     {
-        //printf("OK.");
         int ret = fclose(pfout);
 
         if (ret != 0)
@@ -110,7 +110,6 @@ static void createEmptyTestFile(size_t num) {
         printf("\r\nFAILED to create %s.\r\n", path);
         fflush(stdout);
     }
-    //printf("\r\n");
     fflush(stdout);
 }
 
@@ -120,9 +119,8 @@ int main() {
     sdram_init();
 
     printf("\r\n--- Mbed OS filesystem example ---\r\n");
-    printf("Bug demo 01: Directory listing never ends\r\n");
-    printf("Demonstrate a bug where the directory listing for a full directory (with\r\n"
-          "65534 files) never terminates.\r\n"
+    printf("Bug(?) demo 02: File write time increases\r\n");
+    printf("...\r\n" // TODO: elaborate...
           "Use a big HeapBlockDevice (not SD Card) for speed.\r\n\r\n");
     fflush(stdout);
 
@@ -150,41 +148,32 @@ int main() {
     printf("Create test directory %s.\r\n", testDirPath);
     mkdir(testDirPath, S_IRWXU | S_IRWXG | S_IRWXO);
 
-    printf("Almost fill up the test directory (create %d files):\r\n",
-          (FAT32_MAX_FILES_PER_DIR - 1) );
+    Timer timer;
 
     printf("Creating files...\r\n");
-    for (size_t i = 0; i < (FAT32_MAX_FILES_PER_DIR - 1); i++)
+    for (size_t i = 0; i < (FAT32_MAX_FILES_PER_DIR - 1); i += NUM_FILES_PER_LOOP)
     {
-        if ((i % 100) == 0)
+        printf("  Files %5u - %5u: ", i, (i + NUM_FILES_PER_LOOP - 1) );
+        fflush(stdout);
+
+        timer.reset();
+        timer.start();
+        for (size_t j = i; j < (i + NUM_FILES_PER_LOOP); j++)
         {
-           printf("\r%5u", i);
-           fflush(stdout);
+            createEmptyTestFile(j);
         }
-        createEmptyTestFile(i);
+        timer.stop();
+
+        printf("%6i ms\r\n", timer.read_ms());
     }
-    printf("\rDone.\r\n");
+    printf("\r\nDone.\r\n");
 
     printf("\r\n\r\n"
-           "**********\r\n"
-           "Show that directory listing works fine when dir is not full:\r\n"
            "**********\r\n");
     printRootAndTestDirListing();
 
-    printf("\r\n\r\n"
-           "**********\r\n"
-           "Fill the directory; directory listing never ends:\r\n"
-           "**********\r\n");
-    // Create one more file to fill the dir.
-    createEmptyTestFile(FAT32_MAX_FILES_PER_DIR - 1); // -1 b/c 0-indexed numbering
+    printf("\r\n\r\n**********\r\n");
 
-    //BUG: dirent * returned by readdir() doesn't go NULL after last entry
-    printRootAndTestDirListing();
-
-
-    printf("\r\n"
-           "**********\r\n");
-    //BUG: Program never gets here... see above.
     // Tidy up
     printf("Unmounting... ");
     fflush(stdout);
