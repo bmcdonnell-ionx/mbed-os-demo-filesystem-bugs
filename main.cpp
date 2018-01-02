@@ -31,8 +31,11 @@
 #define FAT32_MAX_FILES_PER_DIR (65534)
 
 
+// Trial and error suggests each empty file is consuming 32 KiB on the
+//  block device.
+// At this rate, 65534 files take > 2 MiB, so make a 3 MiB block device.
 // Physical block device, can be any device that supports the BlockDevice API
-HeapBlockDevice bd(8*1024*1024);
+HeapBlockDevice bd(3*1024*1024); // 3 MiB
 
 // File system declaration
 FATFileSystem fs("fs", &bd);
@@ -118,7 +121,7 @@ int main() {
     printf("Bug demo 01: Directory listing never ends\r\n");
     printf("Demonstrate a bug where the directory listing for a full directory (with\r\n"
           "65534 files) never terminates.\r\n"
-          "Use a HeapBlockDevice (not SD Card) for speed.\r\n\r\n");
+          "Use a big HeapBlockDevice (not SD Card) for speed.\r\n\r\n");
     fflush(stdout);
 
     // Setup the irq in case we want to use it
