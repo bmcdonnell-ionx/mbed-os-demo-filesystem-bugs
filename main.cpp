@@ -28,7 +28,7 @@
 //#include "LittleFileSystem.h"
 #include "FATFileSystem.h"
 
-#define FAT32_MAX_FILES_PER_DIR (65534)
+#define FILES_PER_SUBDIR (3000)
 #define NUM_FILES_PER_LOOP      (  250)
 #define SERIAL_BAUD_RATE (115200)
 
@@ -50,7 +50,10 @@ static void printDirListing(DIR *d) {
               break;
          }
 
-         printf("    %s\r\n", e->d_name);
+         // print each filename
+         // append a trailing slash if it's a directory
+         printf("    %s%s\r\n", e->d_name,
+               (e->d_type == DT_DIR ? "/" : ""));
     }
 }
 
@@ -90,9 +93,9 @@ static void printRootAndTestDirListing() {
 }
 
 
-static void createEmptyTestFile(size_t num) {
+static void createEmptyTestFile(char const *dirpath, size_t num) {
     char path[30];
-    sprintf(path, "/fs/fs-test/%08x.bin", num);
+    sprintf(path, "%s/%08x.bin", dirpath, num);
     fflush(stdout);
     FILE *pfout = fopen(path, "w");
     if (pfout != NULL)
@@ -118,10 +121,10 @@ static void createEmptyTestFile(size_t num) {
 int main() {
     sdram_init();
 
-    printf("\r\n--- Mbed OS filesystem example ---\r\n");
-    printf("Bug(?) demo 02: File write time increases\r\n");
-    printf("...\r\n" // TODO: elaborate...
-          "Use a big HeapBlockDevice (not SD Card) for speed.\r\n\r\n");
+    printf("\r\n--- Mbed OS filesystem example ---\r\n"
+           "Bug(?) demo 02a: File write time increases (empty files)\r\n"
+           "More files in a directory increases the time it takes to write.\r\n"
+           "Use a big HeapBlockDevice (not SD Card) for speed.\r\n\r\n");
     fflush(stdout);
 
     // Setup the irq in case we want to use it
@@ -150,21 +153,31 @@ int main() {
 
     Timer timer;
 
-    printf("Creating files...\r\n");
-    for (size_t i = 0; i < (FAT32_MAX_FILES_PER_DIR - 1); i += NUM_FILES_PER_LOOP)
+    for (size_t dirnum = 0; dirnum < 3; dirnum++)
     {
-        printf("  Files %5u - %5u: ", i, (i + NUM_FILES_PER_LOOP - 1) );
-        fflush(stdout);
+       char subdirpath[30];
+       strcpy (subdirpath, testDirPath);
+       sprintf(subdirpath + strlen(subdirpath), "/%02u", dirnum);
+       printf("%s", subdirpath);
+       fflush(stdout);
+       mkdir  (subdirpath, S_IRWXU | S_IRWXG | S_IRWXO);
 
-        timer.reset();
-        timer.start();
-        for (size_t j = i; j < (i + NUM_FILES_PER_LOOP); j++)
-        {
-            createEmptyTestFile(j);
-        }
-        timer.stop();
+       printf(" - creating files...\r\n");
+       for (size_t i = 0; i < FILES_PER_SUBDIR; i += NUM_FILES_PER_LOOP)
+       {
+           printf("  Files %5u - %5u: ", i, (i + NUM_FILES_PER_LOOP - 1) );
+           fflush(stdout);
 
-        printf("%6i ms\r\n", timer.read_ms());
+           timer.reset();
+           timer.start();
+           for (size_t j = i; j < (i + NUM_FILES_PER_LOOP); j++)
+           {
+               createEmptyTestFile(subdirpath, j);
+           }
+           timer.stop();
+
+           printf("%6i ms\r\n", timer.read_ms());
+       }
     }
     printf("\r\nDone.\r\n");
 
