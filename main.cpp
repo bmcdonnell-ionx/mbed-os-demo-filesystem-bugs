@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "mbed.h"
+#include "sdram.h"
 #include <stdio.h>
 #include <errno.h>
 
@@ -71,6 +72,7 @@ void erase() {
 // Entry point for the example
 int main() {
     printf("--- Mbed OS filesystem example ---\n");
+   sdram_init();
 
     // Setup the irq in case we want to use it
     irq.fall(erase);
