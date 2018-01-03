@@ -28,16 +28,13 @@
 //#include "LittleFileSystem.h"
 #include "FATFileSystem.h"
 
-#define FILES_PER_SUBDIR (3000)
-#define NUM_FILES_PER_LOOP      (  250)
+#define FILES_PER_SUBDIR    (1500)
+#define NUM_FILES_PER_LOOP  ( 100)
 #define SERIAL_BAUD_RATE (115200)
 
 
-// Trial and error suggests each empty file is consuming 32 KiB on the
-//  block device.
-// At this rate, 65534 files take > 2 MiB, so make a 3 MiB block device.
 // Physical block device, can be any device that supports the BlockDevice API
-HeapBlockDevice bd(3*1024*1024); // 3 MiB
+HeapBlockDevice bd(24*1024*1024);
 
 // File system declaration
 FATFileSystem fs("fs", &bd);
@@ -93,13 +90,30 @@ static void printRootAndTestDirListing() {
 }
 
 
-static void createEmptyTestFile(char const *dirpath, size_t num) {
+static void createTestFile(char const *dirpath, size_t num) {
     char path[30];
     sprintf(path, "%s/%08x.bin", dirpath, num);
     fflush(stdout);
     FILE *pfout = fopen(path, "w");
     if (pfout != NULL)
     {
+        static uint8_t const zero1k[1024] = {0};
+        bool writeOK = true;
+
+        // write 4 KiB of zeros to each file
+        for (size_t i = 0; i < 4; i++)
+        {
+            int ret = fwrite(zero1k, 1, 1024, pfout);
+            writeOK = (ret == 1024);
+
+            if (!writeOK)
+            {
+               printf("\r\n ERROR WRITING %s.\r\n", path);
+               fflush(stdout);
+               break;
+            }
+        }
+
         int ret = fclose(pfout);
 
         if (ret != 0)
@@ -122,7 +136,7 @@ int main() {
     sdram_init();
 
     printf("\r\n--- Mbed OS filesystem example ---\r\n"
-           "Bug(?) demo 02a: File write time increases (empty files)\r\n"
+           "Bug(?) demo 02b: File write time increases (small, non-empty files)\r\n"
            "More files in a directory increases the time it takes to write.\r\n"
            "Use a big HeapBlockDevice (not SD Card) for speed.\r\n\r\n");
     fflush(stdout);
@@ -172,7 +186,7 @@ int main() {
            timer.start();
            for (size_t j = i; j < (i + NUM_FILES_PER_LOOP); j++)
            {
-               createEmptyTestFile(subdirpath, j);
+               createTestFile(subdirpath, j);
            }
            timer.stop();
 
