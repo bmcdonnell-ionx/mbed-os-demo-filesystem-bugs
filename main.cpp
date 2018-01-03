@@ -165,14 +165,16 @@ int main() {
     }
     printf("\rDone.\r\n");
 
-    printf("\r\n\r\n**********\r\n");
-    printf("Show that directory listing works fine when dir is not full:\r\n");
-    printf("\r\n**********\r\n");
+    printf("\r\n\r\n"
+           "**********\r\n"
+           "Show that directory listing works fine when dir is not full:\r\n"
+           "**********\r\n");
     printRootAndTestDirListing();
 
-    printf("\r\n\r\n**********\r\n");
-    printf("Fill the directory; directory listing never ends:\r\n");
-    printf("\r\n**********\r\n");
+    printf("\r\n\r\n"
+           "**********\r\n"
+           "Fill the directory; directory listing never ends:\r\n"
+           "**********\r\n");
     // Create one more file to fill the dir.
     createEmptyTestFile(FAT32_MAX_FILES_PER_DIR - 1); // -1 b/c 0-indexed numbering
 
@@ -180,7 +182,8 @@ int main() {
     printRootAndTestDirListing();
 
 
-    printf("\r\n\r\n**********\r\n");
+    printf("\r\n"
+           "**********\r\n");
     //BUG: Program never gets here... see above.
     // Tidy up
     printf("Unmounting... ");
