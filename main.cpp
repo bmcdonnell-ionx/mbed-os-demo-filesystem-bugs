@@ -28,8 +28,8 @@
 //#include "LittleFileSystem.h"
 #include "FATFileSystem.h"
 
-#define FILES_PER_SUBDIR    (1500)
-#define NUM_FILES_PER_LOOP  ( 100)
+#define MAX_FILES_PER_DIR (65534)
+#define TEST_FILE_SIZE (512*1024)
 
 
 // Physical block device, can be any device that supports the BlockDevice API
@@ -90,33 +90,50 @@ static void printRootAndTestDirListing() {
 }
 
 
-static void createTestFile(char const *dirpath, size_t num) {
-    char path[30];
-    sprintf(path, "%s/%08x.bin", dirpath, num);
-    fflush(stdout);
-    FILE *pfout = fopen(path, "w");
-    if (pfout != NULL)
-    {
-        static uint8_t const zero1k[1024] = {0};
-        bool writeOK = true;
+static void *Zeroes = NULL;
 
-        // write 4 KiB of zeros to each file
-        for (size_t i = 0; i < 4; i++)
+static bool initTest()
+{
+   bool initOK;
+
+   Zeroes = malloc(TEST_FILE_SIZE);
+   initOK = (Zeroes != NULL);
+
+   if (initOK)
+   {
+      memset(Zeroes, 0, TEST_FILE_SIZE);
+   }
+
+   return initOK;
+}
+
+
+static bool createTestFile(char const *path)
+{
+    FILE *pfout = fopen(path, "w");
+    bool openOK  = (pfout != NULL);
+    bool writeOK = false;
+    bool closeOK = false;
+
+    if (openOK)
+    {
+        writeOK = true;
+
         {
-            int ret = fwrite(zero1k, 1, 1024, pfout);
-            writeOK = (ret == 1024);
+            int ret = fwrite(Zeroes, 1, TEST_FILE_SIZE, pfout);
+            writeOK = (ret == TEST_FILE_SIZE);
 
             if (!writeOK)
             {
                printf("\r\n ERROR WRITING %s.\r\n", path);
                fflush(stdout);
-               break;
             }
         }
 
         int ret = fclose(pfout);
+        closeOK = (ret == 0);
 
-        if (ret != 0)
+        if (!closeOK)
         {
             printf("\r\n ERROR CLOSING %s.\r\n", path);
             fflush(stdout);
@@ -128,6 +145,60 @@ static void createTestFile(char const *dirpath, size_t num) {
         fflush(stdout);
     }
     fflush(stdout);
+
+    return (openOK && writeOK && closeOK);
+}
+
+
+static void runtest()
+{
+   char testDirPath[30] = "/fs/fs-test";
+   printf("Create test parent directory %s.\r\n", testDirPath);
+   mkdir(testDirPath, S_IRWXU | S_IRWXG | S_IRWXO);
+
+   strcat(testDirPath, "/00000000");
+   printf("Create test directory %s.\r\n", testDirPath);
+   mkdir(testDirPath, S_IRWXU | S_IRWXG | S_IRWXO);
+
+   Timer timer;
+
+   printf("Create files...\r\n");
+   for (size_t i = 0; i < MAX_FILES_PER_DIR; i++)
+   {
+       char path[45];
+       sprintf(path, "%s/%08x.bin", testDirPath, i);
+       printf("%s ", path);
+       fflush(stdout);
+
+       timer.reset();
+       timer.start();
+       bool fileOK = createTestFile(path);
+       timer.stop();
+
+       printf("%6i ms\r\n", timer.read_ms());
+
+       // quit on first failure
+       if (!fileOK)
+       {
+          break;
+       }
+   }
+   printf("\r\nDone.\r\n");
+
+   printf("\r\n\r\n"
+          "**********\r\n");
+   printRootAndTestDirListing();
+
+   printf("\r\n\r\n**********\r\n");
+
+   // Tidy up
+   printf("Unmounting... ");
+   fflush(stdout);
+   int err = fs.unmount();
+   printf("%s\n", (err < 0 ? "Fail :(" : "OK"));
+   if (err < 0) {
+       error("error: %s (%d)\n", strerror(-err), err);
+   }
 }
 
 
@@ -136,9 +207,8 @@ int main() {
     sdram_init();
 
     printf("\r\n--- Mbed OS filesystem example ---\r\n"
-           "Bug(?) demo 02b: File write time increases (small, non-empty files)\r\n"
-           "More files in a directory increases the time it takes to write.\r\n"
-           "Use a big HeapBlockDevice (not SD Card) for speed.\r\n\r\n");
+           "Bug demo 03: Corrupt the filesystem on the SD Card.\r\n"
+           "Requires a large block device (8+ GB).\r\n\r\n");
     fflush(stdout);
 
     // Setup the irq in case we want to use it
@@ -149,67 +219,24 @@ int main() {
     fflush(stdout);
     int err = fs.mount(&bd);
     printf("%s\r\n", (err ? "Fail :(" : "OK"));
-    if (err) {
-        // Reformat if we can't mount the filesystem
-        // this should only happen on the first boot
-        printf("No filesystem found, formatting... ");
-        fflush(stdout);
-        err = fs.reformat(&bd);
-        printf("%s\r\n", (err ? "Fail :(" : "OK"));
-        if (err) {
-            error("error: %s (%d)\r\n", strerror(-err), err);
-        }
-    }
-
-    char const testDirPath[] = "/fs/fs-test";
-    printf("Create test directory %s.\r\n", testDirPath);
-    mkdir(testDirPath, S_IRWXU | S_IRWXG | S_IRWXO);
-
-    Timer timer;
-
-    for (size_t dirnum = 0; dirnum < 3; dirnum++)
+    if (err)
     {
-       char subdirpath[30];
-       strcpy (subdirpath, testDirPath);
-       sprintf(subdirpath + strlen(subdirpath), "/%02u", dirnum);
-       printf("%s", subdirpath);
-       fflush(stdout);
-       mkdir  (subdirpath, S_IRWXU | S_IRWXG | S_IRWXO);
+        printf("No filesystem found.\r\n");
+    }
+    else
+    {
+       bool initOK = initTest();
 
-       printf(" - creating files...\r\n");
-       for (size_t i = 0; i < FILES_PER_SUBDIR; i += NUM_FILES_PER_LOOP)
+       if (initOK)
        {
-           printf("  Files %5u - %5u: ", i, (i + NUM_FILES_PER_LOOP - 1) );
-           fflush(stdout);
-
-           timer.reset();
-           timer.start();
-           for (size_t j = i; j < (i + NUM_FILES_PER_LOOP); j++)
-           {
-               createTestFile(subdirpath, j);
-           }
-           timer.stop();
-
-           printf("%6i ms\r\n", timer.read_ms());
+          runtest();
+       }
+       else
+       {
+          printf("Test initialization failure - abort.\r\n");
        }
     }
-    printf("\r\nDone.\r\n");
 
-    printf("\r\n\r\n"
-           "**********\r\n");
-    printRootAndTestDirListing();
-
-    printf("\r\n\r\n**********\r\n");
-
-    // Tidy up
-    printf("Unmounting... ");
-    fflush(stdout);
-    err = fs.unmount();
-    printf("%s\n", (err < 0 ? "Fail :(" : "OK"));
-    if (err < 0) {
-        error("error: %s (%d)\n", strerror(-err), err);
-    }
-        
     printf("Mbed OS filesystem example done!\r\n");
     fflush(stdout);
 
