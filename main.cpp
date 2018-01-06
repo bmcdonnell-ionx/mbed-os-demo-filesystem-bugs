@@ -21,8 +21,8 @@
 // Block devices
 //#include "SPIFBlockDevice.h"
 //#include "DataFlashBlockDevice.h"
-//#include "SDBlockDevice.h"
-#include "HeapBlockDevice.h"
+#include "SDBlockDevice.h"
+//#include "HeapBlockDevice.h"
 
 // File systems
 //#include "LittleFileSystem.h"
@@ -33,10 +33,11 @@
 
 
 // Physical block device, can be any device that supports the BlockDevice API
-HeapBlockDevice bd(24*1024*1024);
+SDBlockDevice bd  (p5, p6, p7, p8); // mosi, miso, sclk, cs
 
 // File system declaration
-FATFileSystem fs("fs", &bd);
+//FATFileSystem fs("fs", &bd);
+FATFileSystem fs("fs");
 
 
 static void printDirListing(DIR *d) {
