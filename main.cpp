@@ -31,30 +31,6 @@
 #define MAX_FILES_PER_DIR (65534)
 #define TEST_FILE_SIZE (512*1024)
 
-/*
- * Ideally we'd be able to just keep the log file open, and call
- * fflush() and fsync(fileno(pLogfile)) as needed to ensure the latest
- * data written to it reaches the SD Card. However, fsync() is not available...
- * https://github.com/ARMmbed/mbed-os/issues/5725
- *
- * TODO: Get rid of FLUSH_SYNC_WORKAROUND() when this issue is resolved.
- *
- * We work around the issue by closing and re-opening the file instead.
- * This is NOT guaranteed to produce the desired syncing behavior, but
- * from experimentation, it seems to be doing it.
- * https://linux.die.net/man/3/fclose
- */
-#define FLUSH_SYNC_WORKAROUND(fout, pathstr) \
-         fclose (fout);                      \
-         fout = fopen(pathstr, "a");         \
-                                             \
-         if (fout == NULL)                   \
-         {                                   \
-            printf("\r\nERROR: Cannot re-open file \"%s\". Test aborted.\r\n\r\n", \
-                  pathstr);                  \
-            return;                          \
-         }                                   \
-
 
 // Physical block device, can be any device that supports the BlockDevice API
 SDBlockDevice bd  (p5, p6, p7, p8); // mosi, miso, sclk, cs
@@ -180,38 +156,10 @@ static void runtest()
    printf("Create test parent directory %s.\r\n", testDirPath);
    mkdir(testDirPath, S_IRWXU | S_IRWXG | S_IRWXO);
 
-   char logfilePath[30];
-   sprintf(logfilePath, "%s/log.txt", testDirPath);
-   FILE *pfLog = fopen(logfilePath, "a");
-   if (pfLog != NULL)
-   {
-      printf("Open logfile %s.\r\n", logfilePath);
-   }
-   else
-   {
-      printf("ERROR: could not open logfile %s. Abort.\r\n", logfilePath);
-      return;
-   }
-
    char testSubdirPath[30];
    sprintf(testSubdirPath, "%s/00000000", testDirPath);
    printf("Create test directory %s.\r\n", testSubdirPath);
    mkdir(testSubdirPath, S_IRWXU | S_IRWXG | S_IRWXO);
-
-   char checksumPath[45];
-   sprintf(checksumPath, "%s/checks.txt", testSubdirPath);
-   printf("Create checksums file %s.\r\n", checksumPath);
-   FILE *pfCksum = fopen(checksumPath, "w");
-
-   if (pfCksum != NULL)
-   {
-      fclose(pfCksum);
-   }
-   else
-   {
-      printf("ERROR: could not create checksumfile %s. Abort.\r\n", checksumPath);
-      return;
-   }
 
 
    Timer timer;
@@ -224,9 +172,7 @@ static void runtest()
        char path[45];
        sprintf(path, "%s/%s", testDirPath, filename);
        printf("%s ", path);
-       fprintf(pfLog, "%s ", path);
        fflush(stdout);
-       FLUSH_SYNC_WORKAROUND(pfLog, logfilePath);
 
        timer.reset();
        timer.start();
@@ -235,36 +181,9 @@ static void runtest()
 
        printf("%6i ms\r\n", timer.read_ms());
 
-       if (fileOK)
+       if (!fileOK) // quit on first failure
        {
-          fprintf(pfLog, "OK.\r\n");
-          FLUSH_SYNC_WORKAROUND(pfLog, logfilePath);
-
-          FILE *pfCksum = fopen(checksumPath, "a");
-
-          if (pfCksum == NULL)
-          {
-             printf("ERROR: could not open checksum file %s.\r\n", checksumPath);
-             break;
-          }
-
-          static uint8_t const zerosum[16] = {0};
-          fprintf(pfCksum,
-                "%02x%02x%02x%02x%02x%02x%02x%02x"
-                "%02x%02x%02x%02x%02x%02x%02x%02x *"
-              "%s\n",
-              zerosum[ 0], zerosum[ 1], zerosum[ 2], zerosum[ 3],
-              zerosum[ 4], zerosum[ 5], zerosum[ 6], zerosum[ 7],
-              zerosum[ 8], zerosum[ 9], zerosum[10], zerosum[11],
-              zerosum[12], zerosum[13], zerosum[14], zerosum[15],
-              filename);
-
-          fclose(pfCksum);
-       }
-       else // quit on first failure
-       {
-          fprintf(pfLog, "ERROR.\r\n");
-          FLUSH_SYNC_WORKAROUND(pfLog, logfilePath);
+          // createTestFile() prints error text
           break;
        }
    }
