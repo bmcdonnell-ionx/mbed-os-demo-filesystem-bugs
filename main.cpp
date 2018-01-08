@@ -30,7 +30,6 @@
 
 #define FILES_PER_SUBDIR    (1500)
 #define NUM_FILES_PER_LOOP  ( 100)
-#define SERIAL_BAUD_RATE (115200)
 
 
 // Physical block device, can be any device that supports the BlockDevice API
