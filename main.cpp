@@ -106,12 +106,6 @@ static void runtest()
    printf("Create test parent directory %s.\r\n", testDirPath);
    mkdir(testDirPath, S_IRWXU | S_IRWXG | S_IRWXO);
 
-   char testSubdirPath[30];
-   sprintf(testSubdirPath, "%s/00000000", testDirPath);
-   printf("Create test directory %s.\r\n", testSubdirPath);
-   mkdir(testSubdirPath, S_IRWXU | S_IRWXG | S_IRWXO);
-
-
    Timer timer;
 
    printf("Create files...\r\n");
