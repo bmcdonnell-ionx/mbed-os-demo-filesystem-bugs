@@ -40,56 +40,6 @@ SDBlockDevice bd  (p5, p6, p7, p8); // mosi, miso, sclk, cs
 FATFileSystem fs("fs");
 
 
-static void printDirListing(DIR *d) {
-    while (true) {
-         struct dirent *e = readdir(d);
-         if (!e) {
-              break;
-         }
-
-         // print each filename
-         // append a trailing slash if it's a directory
-         printf("    %s%s\r\n", e->d_name,
-               (e->d_type == DT_DIR ? "/" : ""));
-    }
-}
-
-
-static void printRootAndTestDirListing() {
-    // Display the root directory
-    printf("Opening the root directory... ");
-    fflush(stdout);
-    DIR *d = opendir("/fs/");
-    printf("%s\r\n", (!d ? "Fail :(" : "OK"));
-    if (!d) {
-         error("error: %s (%d)\r\n", strerror(errno), -errno);
-    }
-
-    printf("root directory:\r\n");
-    printDirListing(d);
-
-    // Display the test directory
-    printf("Opening the test directory... ");
-    fflush(stdout);
-    d = opendir("/fs/fs-test");
-    printf("%s\r\n", (!d ? "Fail :(" : "OK"));
-    if (!d) {
-         error("error: %s (%d)\r\n", strerror(errno), -errno);
-    }
-
-    printf("test directory:\r\n");
-    printDirListing(d);
-
-    printf("Closing the root directory... ");
-    fflush(stdout);
-    int err = closedir(d);
-    printf("%s\r\n", (err < 0 ? "Fail :(" : "OK"));
-    if (err < 0) {
-         error("error: %s (%d)\r\n", strerror(errno), -errno);
-    }
-}
-
-
 static void *Zeroes = NULL;
 
 static bool initTest()
@@ -188,20 +138,56 @@ static void runtest()
        }
    }
    printf("\r\nDone.\r\n");
+}
 
-   printf("\r\n\r\n"
-          "**********\r\n");
-   printRootAndTestDirListing();
 
-   printf("\r\n\r\n**********\r\n");
+static void recursiveDirectoryListing(char const *path)
+{
+   static unsigned int level = 0;
 
-   // Tidy up
-   printf("Unmounting... ");
-   fflush(stdout);
-   int err = fs.unmount();
-   printf("%s\n", (err < 0 ? "Fail :(" : "OK"));
-   if (err < 0) {
-       error("error: %s (%d)\n", strerror(-err), err);
+   DIR *d = opendir(path);
+   if (!d)
+   {
+        error("error: %s (%d)\r\n", strerror(errno), -errno);
+   }
+   else
+   {
+      bool first = true;
+
+      while (true)
+      {
+         struct dirent *e = readdir(d);
+         if (!e)
+         {
+            if (first)
+            {
+               printf("  %*s(empty)\r\n", 2*level, "");
+            }
+            break;
+         }
+
+         first = false;
+         bool isDir = (e->d_type == DT_DIR);
+
+         // print each filename
+         // append a trailing slash if it's a directory
+         printf("  %*s%s%s\r\n", 2*level, "", e->d_name,
+              (isDir ? "/" : ""));
+
+         if (isDir)
+         {
+            char fullpath[sizeof ((struct dirent *)NULL)->d_name];
+            strcpy(fullpath, path);
+            if (fullpath[strlen(fullpath)-1] != '/')
+            {
+               strcat(fullpath, "/");
+            }
+            strcat(fullpath, e->d_name);
+            level++;
+            recursiveDirectoryListing(fullpath);
+            level--;
+         }
+      }
    }
 }
 
@@ -233,11 +219,26 @@ int main() {
 
        if (initOK)
        {
+          printf("Disk contents before test:\r\n\r\n");
+          recursiveDirectoryListing("/fs");
+
           runtest();
+
+          printf("Disk contents after test:\r\n\r\n");
+          recursiveDirectoryListing("/fs");
        }
        else
        {
           printf("Test initialization failure - abort.\r\n");
+       }
+
+       // Tidy up
+       printf("Unmounting... ");
+       fflush(stdout);
+       int err = fs.unmount();
+       printf("%s\n", (err < 0 ? "Fail :(" : "OK"));
+       if (err < 0) {
+           error("error: %s (%d)\n", strerror(-err), err);
        }
     }
 
