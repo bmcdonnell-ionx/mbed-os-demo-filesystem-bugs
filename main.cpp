@@ -29,7 +29,7 @@
 #include "FATFileSystem.h"
 
 #define MAX_FILES_PER_DIR (65534)
-#define TEST_FILE_SIZE (512*1024)
+#define TEST_FILE_SIZE_KIB (512)
 
 
 // Physical block device, can be any device that supports the BlockDevice API
@@ -38,24 +38,6 @@ SDBlockDevice bd  (p5, p6, p7, p8); // mosi, miso, sclk, cs
 // File system declaration
 //FATFileSystem fs("fs", &bd);
 FATFileSystem fs("fs");
-
-
-static void *Zeroes = NULL;
-
-static bool initTest()
-{
-   bool initOK;
-
-   Zeroes = malloc(TEST_FILE_SIZE);
-   initOK = (Zeroes != NULL);
-
-   if (initOK)
-   {
-      memset(Zeroes, 0, TEST_FILE_SIZE);
-   }
-
-   return initOK;
-}
 
 
 static bool createTestFile(char const *path)
@@ -70,11 +52,30 @@ static bool createTestFile(char const *path)
         writeOK = true;
 
         {
-            int ret = fwrite(Zeroes, 1, TEST_FILE_SIZE, pfout);
-            writeOK = (ret == TEST_FILE_SIZE);
+           size_t numBytesWritten = 0;
 
-            if (!writeOK)
+           // write 1/2 KiB on each iteration
+           for (size_t i = 0; i < 2*TEST_FILE_SIZE_KIB; i++)
+           {
+              static uint8_t const zeroes[512] = {0};
+
+              int ret = fwrite(zeroes, 1, sizeof zeroes, pfout);
+
+              if (ret > 0)
+              {
+                 numBytesWritten += ret;
+              }
+
+              if (ret != sizeof zeroes)
+              {
+                 writeOK = false;
+                 break;
+              }
+           }
+
+            if (numBytesWritten != (TEST_FILE_SIZE_KIB * 1024) )
             {
+               writeOK = false;
                printf("\r\n ERROR WRITING %s.\r\n", path);
                fflush(stdout);
             }
@@ -228,22 +229,13 @@ int main() {
     }
     else
     {
-       bool initOK = initTest();
+       printf("Disk contents before test:\r\n\r\n");
+       recursiveDirectoryListing("/fs");
 
-       if (initOK)
-       {
-          printf("Disk contents before test:\r\n\r\n");
-          recursiveDirectoryListing("/fs");
+       runtest();
 
-          runtest();
-
-          printf("Disk contents after test:\r\n\r\n");
-          recursiveDirectoryListing("/fs");
-       }
-       else
-       {
-          printf("Test initialization failure - abort.\r\n");
-       }
+       printf("Disk contents after test:\r\n\r\n");
+       recursiveDirectoryListing("/fs");
 
        // Tidy up
        printf("Unmounting... ");
