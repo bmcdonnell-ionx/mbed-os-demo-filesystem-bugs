@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include "mbed.h"
-#include "sdram.h"
 #include <stdio.h>
 #include <errno.h>
 
