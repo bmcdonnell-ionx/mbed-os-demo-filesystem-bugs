@@ -196,9 +196,28 @@ static void recursiveDirectoryListing(char const *path)
 int main() {
     sdram_init();
 
-    printf("\r\n--- Mbed OS filesystem example ---\r\n"
-           "Bug demo 03: Corrupt the filesystem on the SD Card.\r\n"
-           "Requires a large block device (8+ GB).\r\n\r\n");
+    printf("\r\n"
+           "--- Mbed OS filesystem example ---\r\n"
+           "Bug demo 03c: Corrupt the filesystem on the SD Card.\r\n"
+           "Requires a large block device (8+ GB).\r\n"
+           "User should pre-populate fs-test/ dir with 512 KiB files,\r\n"
+           "00000000.bin through 00001fbf.bin.\r\n"
+           "It could be done with a bash script like this:\r\n"
+           "\r\n"
+           "   mkdir fs-test\r\n"
+           "   cd fs-test\r\n"
+           "\r\n"
+           "   # create the first file\r\n"
+           "   dd if=/dev/zero of=00000000.bin bs=512K count=1\r\n"
+           "\r\n"
+           "   # make copies\r\n"
+           // "%%" is an escape sequence; prints as "%"
+           "   for f in `printf '%%08x.bin\\n' $( seq 1 8127 )`\r\n"
+           "   do\r\n"
+           "      echo $f\r\n"
+           "      cp 00000000.bin $f\r\n"
+           "   done\r\n"
+           "\r\n");
     fflush(stdout);
 
     // Setup the irq in case we want to use it
