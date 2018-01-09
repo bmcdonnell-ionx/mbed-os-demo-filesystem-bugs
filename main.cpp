@@ -115,7 +115,7 @@ static void runtest()
    Timer timer;
 
    printf("Create files...\r\n");
-   for (size_t i = 0; i < MAX_FILES_PER_DIR; i++)
+   for (size_t i = 0x1fc0; i < MAX_FILES_PER_DIR; i++)
    {
        char filename[15];
        sprintf(filename, "%08x.bin", i);
