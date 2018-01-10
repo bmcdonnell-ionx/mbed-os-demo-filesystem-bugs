@@ -191,7 +191,7 @@ int main() {
 
     printf("\r\n"
            "--- Mbed OS filesystem example ---\r\n"
-           "Bug demo 03c: Corrupt the filesystem on the SD Card.\r\n"
+           "Bug demo 03e: Corrupt the filesystem on the SD Card.\r\n"
            "Requires a large block device (8+ GB).\r\n"
            "User should pre-populate fs-test/ dir with 512 KiB files,\r\n"
            "00000000.bin through 00001fbf.bin.\r\n"
