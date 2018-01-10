@@ -188,7 +188,6 @@ static void recursiveDirectoryListing(char const *path)
 
 // Entry point for the example
 int main() {
-    sdram_init();
 
     printf("\r\n"
            "--- Mbed OS filesystem example ---\r\n"
