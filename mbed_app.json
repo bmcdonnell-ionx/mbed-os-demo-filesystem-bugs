@@ -1,7 +1,10 @@
 {
-    "target_overrides": {
-        "*": {
-            "platform.stdio-convert-newlines": true
-        }
-    }
+   "target_overrides":
+   {
+      "*":
+      {
+         "platform.stdio-baud-rate"          : 115200,
+         "platform.default-serial-baud-rate" : 115200
+      }
+   }
 }
